@@ -6,6 +6,8 @@
 SHELL::SHELL()
 {
 	// ctor
+this->startTime = std::chrono::system_clock::now();
+	this->dirHistory.push_back(getcwd(NULL, 0));
 }
 
 int SHELL::getRuntime()
@@ -23,12 +25,52 @@ SHELL::~SHELL()
 	std::cout << "Runtime: " << this->getRuntime() << " seconds" << std::endl;
 }
 
+void SHELL::sig_handler(int s){
+           printf("Caught signal %d\n",s);
+           /* ::exit(1); */ 
+
+}
+
 void SHELL::changeDir(const char *path)
 {
+	// Check for tilde
+	if (path[0] == '~')
+	{
+		// Get the home directory
+		char *home = getenv("HOME");
+		// Create a new path
+		char *newPath = (char *)malloc(strlen(home) + strlen(path));
+		// Copy the home directory
+		strcpy(newPath, home);
+		// Copy the rest of the path
+		strcat(newPath, path + 1);
+		// Change the directory
+		chdir(newPath);
+		// Free the memory
+		free(newPath);
+	}else if (path[0] == '-')
+	{
+		// Check if there is a previous directory
+		if (this->dirHistory.size() > 1)
+		{
+			// Get the previous directory
+			char *prevDir = this->dirHistory[this->dirHistory.size() - 2];
+			// Change the directory
+			::chdir(prevDir);
+			// Remove the previous directory from the history
+			this->dirHistory.pop_back();
+			return; // Prevent the current directory from being added to the history
+		}
+	}else{
+
 	if (::chdir(path) != 0)
 	{
 		std::cout << "Error: " << strerror(errno) << std::endl;
 	}
+		// Set the new path for history
+	}
+	// Add the new path to the history
+	this->dirHistory.push_back(getcwd(NULL, 0));
 }
 
 // define action performed by detecting signal
@@ -56,7 +98,7 @@ int SHELL::readCommand(char **com, char ***par)
 	size_t len = 0;
 	char *delim = " \n";
 	// get line from stdin
-	line = readline("shell> ");
+	line = readline(getPrefixes().c_str());
 	// if line is empty, return 0
 	if (line == NULL)
 	{
@@ -99,6 +141,18 @@ int SHELL::readCommand(char **com, char ***par)
 	return background;
 }
 
+std::string SHELL::getPrefixes(){
+
+		fs::path currentPath = fs::current_path();
+		// Last element of the path
+		std::string lastElement = currentPath.filename().string();
+		/* std::cout << "\033[1;31mbold red text\033[0m\n"; */
+		/* return "\033[1;31mbold red text\033[0m\n"; */
+		return "\033[1;32m" + currentPath.string() + "\033[0m" + " > ";
+		/* std::cout << "\033[1;32m" << currentPath << "\033[0m" */
+		/* 		  << " > " << lastElement << " > "; */
+}
+
 void SHELL::run()
 {
 	std::signal(SIGINT, signalHandler);
@@ -106,13 +160,20 @@ void SHELL::run()
 	char *command;
 	char **parameters;
        bool running = true;
+      
+
+//Handle Sig
+ struct sigaction sigIntHandler;
+
+   sigIntHandler.sa_handler = sig_handler;
+   sigemptyset(&sigIntHandler.sa_mask);
+   sigIntHandler.sa_flags = 0;
+
+   sigaction(SIGINT, &sigIntHandler, NULL);
+
+
 	while (running)
 	{
-		fs::path currentPath = fs::current_path();
-		// Last element of the path
-		std::string lastElement = currentPath.filename().string();
-		std::cout << "\033[1;32m" << currentPath << "\033[0m"
-				  << " > " << lastElement << " > ";
 		/* std::cout << fs::current_path() << ">"; */
 		int background = readCommand(&command, &parameters);
 		// Command empty 
@@ -124,7 +185,7 @@ void SHELL::run()
 		if (strcmp(command, "exit") == 0)
 		{
 			std::cout << "Are you sure you want to exit? (y/n)" << std::endl;
-			char *answer;
+			char *answer = (char *)malloc(sizeof(char) * 100);
 			std::cin >> answer;
 			if (strcmp(answer, "y") == 0)
 			{
@@ -135,6 +196,7 @@ void SHELL::run()
 			{
 				continue;
 			}
+
 		}
 		// Change Dir command
 		if (strcmp(command, "cd") == 0)
@@ -165,7 +227,7 @@ void SHELL::run()
 			std::cout << "Background process: " << childPid << " " << tempCMD << std::endl;
 			signal(SIGCHLD, endSignalHandler);
 		}else{
-			std::cout << "RUN in foreground" << std::endl;
+			/* std::cout << "RUN in foreground" << std::endl; */
                         			// Parent process
 			int status;
 			if (waitpid(childPid, &status, 0) == -1)
@@ -173,7 +235,7 @@ void SHELL::run()
 				std::cout << "ErrorWAITPID: " << strerror(errno) << std::endl;
 				break;
 			}
-			std::cout << "Child process exited with status: " << status << std::endl;
+			/* std::cout << "Child process exited with status: " << status << std::endl; */
 
 
 		}
