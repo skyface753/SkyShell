@@ -26,10 +26,23 @@ SHELL::~SHELL()
 }
 
 void SHELL::sig_handler(int s){
-           printf("Caught signal %d\n",s);
-           /* ::exit(1); */ 
-
+	/* ::exit(0); */
+	// Flush
+	std::cout << std::endl;
 }
+enum ownCommands  { help, cd, EXIT};
+
+ownCommands getOwnCommand(std::string command)
+{
+	if (command == "help")
+		return help;
+	else if (command == "cd")
+		return cd;
+	else if (command == "exit")
+		return EXIT;
+	else
+		return (ownCommands) -1;
+};
 
 void SHELL::changeDir(const char *path)
 {
@@ -102,6 +115,8 @@ int SHELL::readCommand(char **com, char ***par)
 	// if line is empty, return 0
 	if (line == NULL)
 	{
+		// Flush
+		std::cout << std::endl;
 		return 0;
 	}
 
@@ -137,7 +152,8 @@ int SHELL::readCommand(char **com, char ***par)
 	}
 
 	*com = *par[0];
-
+// Flush
+	std::cout << std::endl;
 	return background;
 }
 
@@ -153,16 +169,32 @@ std::string SHELL::getPrefixes(){
 		/* 		  << " > " << lastElement << " > "; */
 }
 
+void SHELL::askForExit(){
+
+			std::cout << "Are you sure you want to exit? (y/n)" << std::endl;
+			char *answer = (char *)malloc(sizeof(char) * 100);
+			std::cin >> answer;
+			if (strcmp(answer, "y") == 0)
+			{
+				this->running = false;
+				return;
+			}
+			else
+			{
+				return;
+			}
+};
+
 void SHELL::run()
 {
+	// SigHandler Background
 	std::signal(SIGINT, signalHandler);
 	int childPid;
 	char *command;
 	char **parameters;
-       bool running = true;
       
 
-//Handle Sig
+//Handle Sig for ctl c
  struct sigaction sigIntHandler;
 
    sigIntHandler.sa_handler = sig_handler;
@@ -172,43 +204,38 @@ void SHELL::run()
    sigaction(SIGINT, &sigIntHandler, NULL);
 
 
-	while (running)
+	while (this->running)
 	{
 		/* std::cout << fs::current_path() << ">"; */
 		int background = readCommand(&command, &parameters);
+		std::cout << "Command: " << command << std::endl;
 		// Command empty 
 		if (command == NULL)
 		{
 			continue;
 		}
-		// Command exit
-		if (strcmp(command, "exit") == 0)
+		// Check for own commands
+		ownCommands ownCommand = getOwnCommand(command);
+		switch (ownCommand)
 		{
-			std::cout << "Are you sure you want to exit? (y/n)" << std::endl;
-			char *answer = (char *)malloc(sizeof(char) * 100);
-			std::cin >> answer;
-			if (strcmp(answer, "y") == 0)
+		case help:
+			{std::cout << "help" << std::endl;
+			break;}
+		case cd:
 			{
-				running = false;
-				continue;
-			}
-			else
-			{
-				continue;
-			}
-
-		}
-		// Change Dir command
-		if (strcmp(command, "cd") == 0)
-		{
 			if (parameters[1] == NULL)
 			{
 				std::cout << "Error: No path specified" << std::endl;
-				continue;
+				break;
 			}
 			changeDir(parameters[1]);
-			continue;
+			break;}
+		case EXIT:{
+			askForExit();
+			break;
 		}
+		default:
+
 		if ((childPid = fork()) == -1)
 		{
 			std::cout << "ErrorFORK: " << strerror(errno) << std::endl;
@@ -238,8 +265,8 @@ void SHELL::run()
 			/* std::cout << "Child process exited with status: " << status << std::endl; */
 
 
-		}
-
+		}}
+std::cin.seekg(0, std::ios::end);
 		/* { */
 		/* 	if(background){ */
 

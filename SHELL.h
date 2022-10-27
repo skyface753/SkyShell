@@ -21,6 +21,7 @@ public:
    int getRuntime();
 void exit();
 private:
+void askForExit();
 std::vector<char*> dirHistory;
 bool running = true;
 static void sig_handler(int s);
