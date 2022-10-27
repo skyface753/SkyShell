@@ -26,9 +26,9 @@ SHELL::~SHELL()
 }
 
 void SHELL::sig_handler(int s){
-	/* ::exit(0); */
+	::exit(0);
 	// Flush
-	std::cout << std::endl;
+	/* std::cout << std::endl; */
 }
 enum ownCommands  { help, cd, EXIT};
 
