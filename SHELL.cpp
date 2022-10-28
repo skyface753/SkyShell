@@ -26,7 +26,8 @@ SHELL::~SHELL()
 }
 
 void SHELL::sig_handler(int s) {
-    ::exit(0);
+    /* std::cin.ignore(); */
+    /* ::exit(0); */
     // Flush
     /* std::cout << std::endl; */
 }
@@ -115,8 +116,6 @@ int SHELL::readCommand(char **com, char ***par)
     // if line is empty, return 0
     if (line == NULL)
     {
-        // Flush
-        std::cout << std::endl;
         return 0;
     }
 
@@ -152,8 +151,6 @@ int SHELL::readCommand(char **com, char ***par)
     }
 
     *com = *par[0];
-// Flush
-    std::cout << std::endl;
     return background;
 }
 
@@ -237,7 +234,6 @@ void SHELL::run()
             break;
         }
         default:
-
             if ((childPid = fork()) == -1)
             {
                 std::cout << "ErrorFORK: " << strerror(errno) << std::endl;
@@ -269,7 +265,7 @@ void SHELL::run()
 
             }
         }
-        std::cin.seekg(0, std::ios::end);
+        /* std::cin.seekg(0, std::ios::end); */
         /* { */
         /* 	if(background){ */
 
