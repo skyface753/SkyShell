@@ -214,6 +214,7 @@ int read_command(char **com, char ***par) {
     // allocate memory for parameters array
     *par = (char ** ) malloc(sizeof(char*) * 10);
     int background = 0; // Replace with type: enum { FOREGROUND, BACKGROUND, PIPE }
+    bool paramQuote = false;
     while (tmp != NULL) {
         
         // if last element is "&"
@@ -246,21 +247,79 @@ int read_command(char **com, char ***par) {
 	    break;
 	}
 	else {
-
-            (*par)[i] = tmp;
-            i++;
-            tmp = strtok(NULL, delim);
-        }
+		if(!paramQuote){
+			if(tmp[0] != '"'){
+	        	    (*par)[i] = tmp;
+	        	    i++;
+        		    tmp = strtok(NULL, delim);
+			}
+			else{
+				paramQuote = true;
+				(*par)[i] = tmp;
+				i++;
+				tmp = strtok(NULL, delim);
+			}
+		}
+		else{
+			if(tmp[strlen(tmp)-1] != '"'){
+				strcat((*par)[i-1], " ");
+				strcat((*par)[i-1], tmp);
+				tmp = strtok(NULL, delim);
+			}
+			else{
+				strcat((*par)[i-1], " ");
+				strcat((*par)[i-1], tmp);
+				paramQuote = false;
+				i++;
+				tmp = strtok(NULL, delim);
+			}
+		}
+	}
     }
-
     *com = *par[0];
-    // Escape the double quotes
-    for (int i = 0; i < strlen(*com); i++) {
-    	if ((*com)[i] == '"') {
-    	    (*com)[i] = '\0';
-    	}
-    }
-
+    // Go through the parameters and put the param in the double quotes in one string
+    /* for (int j = 0; j < i; j++) { */
+	/* if ((*par)[j][0] == '"') { */
+	    /* // We have a double quote */
+	    /* // Get the length of the string */
+	    /* int len = strlen((*par)[j]); */
+	    /* // Check if the last character is a double quote */
+	    /* if ((*par)[j][len - 1] == '"') { */
+		/* // We have a double quote */
+		/* // Remove the double quotes */
+		/* (*par)[j][len - 1] = '\0'; */
+		/* (*par)[j] = (*par)[j] + 1; */
+	    /* } else { */
+		/* // We don't have a double quote */
+		/* // Get the next parameter */
+		/* j++; */
+		/* while (j < i) { */
+		    /* // Get the length of the string */
+		    /* int len = strlen((*par)[j]); */
+		    /* // Check if the last character is a double quote */
+		    /* if ((*par)[j][len - 1] == '"') { */
+			/* // We have a double quote */
+			/* // Remove the double quotes */
+			/* (*par)[j][len - 1] = '\0'; */
+			/* break; */
+		    /* } else { */
+			/* // We don't have a double quote */
+			/* // Get the next parameter */
+			/* j++; */
+		    /* } */
+		/* } */
+	    /* } */
+	/* } */
+    /* } */
+    // Replace the double quotes in the parameters with single quotes
+    /* for (int j = 0; j < i; j++) { */
+	/* char *param = (*par)[j]; */
+	/* for (int k = 0; k < strlen(param); k++) { */
+	    /* if (param[k] == '"') { */
+		/* param[k] = '\''; */
+	    /* } */
+	/* } */
+    /* } */
     return background;
 }
 
