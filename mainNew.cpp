@@ -254,7 +254,13 @@ int read_command(char **com, char ***par) {
     }
 
     *com = *par[0];
-    
+    // Escape the double quotes
+    for (int i = 0; i < strlen(*com); i++) {
+    	if ((*com)[i] == '"') {
+    	    (*com)[i] = '\0';
+    	}
+    }
+
     return background;
 }
 
@@ -334,7 +340,8 @@ int main() {
                 continue;
 
         }
-
+printf("Command: %s\n", command);
+printf("Parameters: %s %s %s %s %s %s %s %s %s %s\n", parameters[0], parameters[1], parameters[2], parameters[3], parameters[4], parameters[5], parameters[6], parameters[7], parameters[8], parameters[9]);
         if ((childPid = fork()) == -1) {
             fprintf(stderr,"can't fork\n");
             exit(1);
