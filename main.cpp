@@ -13,11 +13,12 @@ time_t startTime = 0;
 std::vector<char *> dirHistory;
 char *homeDir;
 
-// get current time in milliseconds
-void setStarttime() { startTime = (time(NULL) - startTime) * 1000; }
+// get current time in seconds
+void setStarttime() { startTime = time(NULL); }
 
-// elapsedTime in milliseconds
-int getElapsedTime() { return (time(NULL) * 1000 - startTime); }
+// elapsedTime in seconds
+int getElapsedTime() { return time(NULL) - startTime; }
+
 // This pipes the output of cmd1 into cmd2.
 void pipe_cmd(char **cmd1, char **cmd2) {
     int fds[2];  // file descriptors
@@ -54,55 +55,23 @@ void pipe_cmd(char **cmd1, char **cmd2) {
     } else
         waitpid(pid, NULL, 0);
 }
-/************************
-function: void pipeCommand(char** cmd1, char** cmd2)
-comment: This pipes the output of cmd1 into cmd2.
-**************************/
-/* void pipeCommand(char** cmd1, char** cmd2) { */
-/*   int fds[2]; // file descriptors */
-/*   pipe(fds); */
-/*   // child process #1 */
-/*   try{ */
-
-/*   printf("cmd1: %s %s %s %s", cmd1[0], cmd1[1], cmd1[2], cmd1[3]); */
-/*   printf("cmd2: %s %s %s %s", cmd2[0], cmd2[1], cmd2[2], cmd2[3]); */
-/*   }  catch(int e){ */
-/*     printf("Exception: %d", e); */
-/*   } */
-/*   if (fork() == 0) { */
-/* 	  std::cout << "child 1" << std::endl; */
-/*     // Reassign stdin to fds[0] end of pipe. */
-/*     dup2(fds[0], STDIN_FILENO); */
-/*     close(fds[1]); */
-/*     close(fds[0]); */
-/*     // Execute the second command. */
-/*     // child process #2 */
-/*     if (fork() == 0) { */
-/* 	    		std::cout << "child 2" << std::endl; */
-/*         // Reassign stdout to fds[1] end of pipe. */
-/*         dup2(fds[1], STDOUT_FILENO); */
-/*         close(fds[0]); */
-/*         close(fds[1]); */
-/*         // Execute the first command. */
-/*         execvp(cmd1[0], cmd1); */
-/*     } */
-/*     wait(NULL); */
-/*     printf("OUTPUT CMD 2"); */
-/*     execvp(cmd2[0], cmd2); */
-/*     } */
-/*     close(fds[1]); */
-/*     close(fds[0]); */
-/*     wait(NULL); */
-/* } */
 
 char *getPrefixes() {
     char *pwd = getcwd(NULL, 0);
+    if (homeDir == NULL) {
+        homeDir = getenv("HOME");
+        // If homeDir is NULL, then the user doesn't have a home directory.
+        if (homeDir == NULL) {
+            return pwd;
+        }
+    }
+    const std::string colorStart = "\033[1;32m";
+    const std::string colorEnd = "\033[0m";
     // Check if we are in or below home directory
     if (strstr(pwd, homeDir) == pwd) {
         // We are in or below home directory
         char *prefix = (char *)malloc(strlen(pwd) - strlen(homeDir) + 2);
-        std::string colorStart = "\033[1;32m";
-        std::string colorEnd = "\033[0m";
+
         strcpy(prefix, colorStart.c_str());
         strcat(prefix, "~");
         strcat(prefix, pwd + strlen(homeDir));
@@ -111,8 +80,7 @@ char *getPrefixes() {
     } else {
         // We are outside home directory
         char *prefix = (char *)malloc(strlen(pwd) + 2);
-        std::string colorStart = "\033[1;32m";
-        std::string colorEnd = "\033[0m";
+
         strcpy(prefix, colorStart.c_str());
         strcat(prefix, pwd);
         strcat(prefix, colorEnd.c_str());
@@ -120,192 +88,232 @@ char *getPrefixes() {
     }
 }
 
-// define action performed by detecting signal
+/*
+ * Define action performed by detecting signal
+ * This function is called when the user presses Ctrl+C.
+ */
 void signalHandler(int signum) {
     // Do nothing
-    fprintf(stdout, "\n%s > ", getPrefixes());
-    /* printf("\nTime: %dms\n", getElapsedTime()); */
-
-    /* exit(signum); */
+    printf("\n%s > ", getPrefixes());  // TODO: print directly
+    // exit(signum);
 }
 
-// define action performed by detecting signal
+// All childPids for cleanup
+std::vector<int> childPids;
+
+/*
+ * Define action performed by detecting signal
+ * This function is called when the a background process finishes.
+ */
 void endSignalHandler(int signum) {
     int status;
     pid_t pid;
 
     if ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         printf("\nProcess %d exited\n", pid);
+        childPids.erase(std::remove(childPids.begin(), childPids.end(), pid),
+                        childPids.end());
     }
+}
+
+int cdToHome() {
+    if (homeDir == NULL) {
+        homeDir = getenv("HOME");
+    }
+    if (homeDir == NULL) {
+        printf("No home directory found.\n");
+        return -1;
+    }
+    chdir(homeDir);
+    dirHistory.push_back(homeDir);
+    return 0;
 }
 
 // define function for changing the directory
 int cd(char *path) {
-    // Check for tilde
-    if (path[0] == '~') {
-        chdir(homeDir);
-        // Get the home directory
-        // Create a new path
-        /* char *newPath = (char *)malloc(strlen(homeDir) + strlen(path)); */
-        /* // Copy the home directory */
-        /* strcpy(newPath, home); */
-        /* // Copy the rest of the path */
-        /* strcat(newPath, path + 1); */
-        /* // Change the directory */
-        /* chdir(newPath); */
-        /* // Free the memory */
-        /* free(newPath); */
-    } else if (path[0] == '-') {
-        // Check if there is a previous directory
-        if (dirHistory.size() > 1) {
-            // Get the previous directory
-            char *prevDir = dirHistory[dirHistory.size() - 2];
-            // Change the directory
-            ::chdir(prevDir);
-            // Remove the previous directory from the history
-            dirHistory.pop_back();
-            return 0;  // Prevent the current directory from being added to the
-                       // history
-        }
+    if (path == NULL) {
+        return cdToHome();
     } else {
-        if (::chdir(path) != 0) {
-            printf("Directory not found\n");
-            return 1;
+        // Check for tilde
+        if (path[0] == '~') {
+            return cdToHome();
+        } else if (path[0] == '-') {
+            // Check if there is a previous directory
+            if (dirHistory.size() > 1) {
+                // Get the previous directory
+                char *prevDir = dirHistory[dirHistory.size() - 2];
+                // Change the directory
+                ::chdir(prevDir);
+                delete[] prevDir;
+                // Remove the previous directory from the history
+                dirHistory.pop_back();
+                // Early return
+                return 0;  // Prevent the current directory from being added to
+                           // the history
+            } else {
+                printf("No previous directory found.\n");
+                return -1;
+            }
+        } else {
+            if (::chdir(path) != 0) {
+                printf("Directory not found\n");
+                return -11;
+            }
         }
-        // Set the new path for history
     }
     // Add the new path to the history
     dirHistory.push_back(getcwd(NULL, 0));
     return 0;
 }
 
+void pipeCommand(char **cmd1Args, char **cmd2Args) {
+    // Create pipe
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        exit(EXIT_FAILURE);
+    }
+    pid_t pid1, pid2;
+    pid1 = fork();
+    if (pid1 == 0) {
+        // Child 1
+        // Close read end of pipe
+        close(pipefd[0]);
+        // Redirect stdout to write end of pipe
+        dup2(pipefd[1], STDOUT_FILENO);
+        // Close write end of pipe
+        close(pipefd[1]);
+        // Execute command
+        execvp(cmd1Args[0], cmd1Args);
+        // If execvp returns, there was an error
+        perror("execvp");
+        exit(EXIT_FAILURE);
+    } else {
+        // Parent
+        pid2 = fork();
+        if (pid2 == 0) {
+            // Child 2
+            // Close write end of pipe
+            close(pipefd[1]);
+            // Redirect stdin to read end of pipe
+            dup2(pipefd[0], STDIN_FILENO);
+            // Close read end of pipe
+            close(pipefd[0]);
+            // Execute command
+            execvp(cmd2Args[0], cmd2Args);
+            // If execvp returns, there was an error
+            perror("execvp");
+            exit(EXIT_FAILURE);
+        } else {
+            // Parent
+            // Close both ends of pipe
+            close(pipefd[0]);
+            close(pipefd[1]);
+            // Wait for children to finish
+            waitpid(pid1, NULL, 0);
+            waitpid(pid2, NULL, 0);
+        }
+    }
+}
+
 /*
- * read command and parameters from stdin as call-by-reference
+ * read command and parameters
  * return if background command is detected
  */
 int read_command(char **com, char ***par) {
-    // display pwd in front of prompt
-    /* char *pwd = getcwd(NULL, 0); */
+    // display prefix
     fprintf(stdout, "%s > ", getPrefixes());
 
     char *line = NULL;
     size_t len = 0;
-    char *delim = " \n";
-    // get line from stdin
-    getline(&line, &len, stdin);
-
-    char *tmp = strtok(line, delim);
-
-    int i = 0;
-
-    // split line into parameters
-    // allocate memory for parameters array
+    char *delim = "\n";
+    // getch
+    int c;
     *par = (char **)malloc(sizeof(char *) * 10);
-    int background =
-        0;  // Replace with type: enum { FOREGROUND, BACKGROUND, PIPE }
-    bool paramQuote = false;
-    while (tmp != NULL) {
-        // if last element is "&"
-        if (strcmp(tmp, "&") == 0) {
-            // set last element to NULL
-            // set background flag
-            (*par)[i] = NULL;
-            background = 1;
-            break;
-        } else if (strcmp(tmp, "|") == 0) {
-            // set last element to NULL
-            // set background flag
-            (*par)[i] = NULL;
-            background = 2;
-            char **cmd1 = *par;
-            char **cmd2 = (char **)malloc(sizeof(char *) * 10);
-            // Params and command for second command
-            int j = 0;
-            tmp = strtok(NULL, delim);
-            while (tmp != NULL) {
-                cmd2[j] = tmp;
-                j++;
-                tmp = strtok(NULL, delim);
-            }
-            cmd2[j] = NULL;
-            printf("\nCommands for PIPE: 1. %s %s 2. %s %s \n\n", cmd1[0],
-                   cmd1[1], cmd2[0], cmd2[1]);
-            // Execute the commands
-            pipe_cmd(cmd1, cmd2);
-            /* pipeCommand(cmd1, cmd2); */
-            break;
-        } else {
-            if (!paramQuote) {
-                if (tmp[0] != '"') {
-                    (*par)[i] = tmp;
-                    i++;
-                    tmp = strtok(NULL, delim);
-                } else {
-                    paramQuote = true;
-                    (*par)[i] = tmp;
-                    i++;
-                    tmp = strtok(NULL, delim);
-                }
-            } else {
-                if (tmp[strlen(tmp) - 1] != '"') {
-                    strcat((*par)[i - 1], " ");
-                    strcat((*par)[i - 1], tmp);
-                    tmp = strtok(NULL, delim);
-                } else {
-                    strcat((*par)[i - 1], " ");
-                    strcat((*par)[i - 1], tmp);
-                    paramQuote = false;
-                    i++;
-                    tmp = strtok(NULL, delim);
-                }
-            }
+    bool isAPipe = false;
+    int pipeIndex = 0;
+
+    while ((c = getchar()) != EOF && c != '\n') {
+        line = (char *)realloc(line, len + 1);
+
+        line[len++] = (char)c;
+        if (c == '|') {
+            isAPipe = true;
+            pipeIndex = len - 1;
         }
     }
-    *com = *par[0];
-    // Go through the parameters and put the param in the double quotes in one
-    // string
-    /* for (int j = 0; j < i; j++) { */
-    /* if ((*par)[j][0] == '"') { */
-    /* // We have a double quote */
-    /* // Get the length of the string */
-    /* int len = strlen((*par)[j]); */
-    /* // Check if the last character is a double quote */
-    /* if ((*par)[j][len - 1] == '"') { */
-    /* // We have a double quote */
-    /* // Remove the double quotes */
-    /* (*par)[j][len - 1] = '\0'; */
-    /* (*par)[j] = (*par)[j] + 1; */
-    /* } else { */
-    /* // We don't have a double quote */
-    /* // Get the next parameter */
-    /* j++; */
-    /* while (j < i) { */
-    /* // Get the length of the string */
-    /* int len = strlen((*par)[j]); */
-    /* // Check if the last character is a double quote */
-    /* if ((*par)[j][len - 1] == '"') { */
-    /* // We have a double quote */
-    /* // Remove the double quotes */
-    /* (*par)[j][len - 1] = '\0'; */
-    /* break; */
-    /* } else { */
-    /* // We don't have a double quote */
-    /* // Get the next parameter */
-    /* j++; */
-    /* } */
-    /* } */
-    /* } */
-    /* } */
-    /* } */
-    // Replace the double quotes in the parameters with single quotes
-    /* for (int j = 0; j < i; j++) { */
-    /* char *param = (*par)[j]; */
-    /* for (int k = 0; k < strlen(param); k++) { */
-    /* if (param[k] == '"') { */
-    /* param[k] = '\''; */
-    /* } */
-    /* } */
-    /* } */
+    // Handle the PIPE
+    if (isAPipe) {
+        char *cmd1 = (char *)malloc(pipeIndex + 1);
+        char *cmd2 = (char *)malloc(len - pipeIndex);
+        strncpy(cmd1, line, pipeIndex);
+        cmd1[pipeIndex] = '\0';
+        strncpy(cmd2, line + pipeIndex + 1, len - pipeIndex - 1);
+        cmd2[len - pipeIndex - 1] = '\0';
+        char **cmd1Args = (char **)malloc(sizeof(char *) * 10);
+        char **cmd2Args = (char **)malloc(sizeof(char *) * 10);
+        int cmd1Argc = 0;
+        int cmd2Argc = 0;
+        char *token = strtok(cmd1, " ");
+        while (token != NULL) {
+            cmd1Args[cmd1Argc++] = token;
+            token = strtok(NULL, " ");
+        }
+        cmd1Args[cmd1Argc] = NULL;
+        token = strtok(cmd2, " ");
+        while (token != NULL) {
+            cmd2Args[cmd2Argc++] = token;
+            token = strtok(NULL, " ");
+        }
+        cmd2Args[cmd2Argc] = NULL;
+        pipeCommand(cmd1Args, cmd2Args);
+
+        return 2;
+    }
+
+    // Check if line is empty
+    if (line == NULL) {
+        return -1;
+    }
+
+    int background = 0;
+    // Check if last character is &
+    if (line[len - 1] == '&') {
+        background = 1;
+        line[len - 1] = '\0';
+    }
+    // Split the line into parameters
+    // TODO: handle quotes
+    char *token = strtok(line, " ");
+    int argc = 0;
+    // Loop through the tokens and put everything in quotes into one parameter
+    bool inQuotes = false;
+    char *param = NULL;
+    while (token != NULL) {     // Token = each word
+        if (token[0] == '"') {  // Start of token is a quote
+            inQuotes = true;    // Set inQuotes to true
+            param = (char *)malloc(strlen(token));
+            strcpy(param, token + 1);  // Copy the token without the first quote
+        } else if (token[strlen(token) - 1] == '"') {  // Current element is the
+                                                       // end of a parameter
+                                                       // with spaces
+            inQuotes = false;                          // Set inQuotes to false
+            strcat(param, " ");                        // Add a space
+            strcat(param, token);                      // Add the token
+            param[strlen(param) - 1] = '\0';           // Remove the last quote
+            (*par)[argc++] = param;  // Add the parameter to the list
+        } else if (inQuotes) {   // Current element is part of a parameter with
+                                 // spaces
+            strcat(param, " ");  // Add a space
+            strcat(param, token);  // Add the token
+        } else {
+            (*par)[argc++] = token;  // Add the token to the list
+        }
+        token = strtok(NULL, " ");  // Get the next token
+    }
+    (*par)[argc] = NULL;  // Add NULL to the end of the list
+    // Set the command
+    *com = (*par)[0];
     return background;
 }
 
@@ -327,41 +335,27 @@ int read_command(char **com, char ***par) {
  */
 
 int main() {
-    dirHistory.push_back(getcwd(NULL, 0));
-    homeDir = std::getenv("HOME");
-    setStarttime();
+    dirHistory.push_back(
+        getcwd(NULL, 0));           // Add the current directory to the history
+    homeDir = std::getenv("HOME");  // Get the home directory
+    setStarttime();                 // Set the start time
 
-    signal(SIGINT, signalHandler);
+    signal(SIGINT, signalHandler);  // Register signal handler for Ctrl+C
 
     int childPid;
     int status;
     char *command;
     char **parameters;
 
-    // Test Pipe
-    /* printf("TEST PIPE\n"); */
-    /* char **cmd1 = (char **) malloc(sizeof(char*) * 10); */
-    /* char **cmd2 = (char **) malloc(sizeof(char*) * 10); */
-    /* cmd1[0] = "env"; */
-    /* cmd1[1] = NULL; */
-    /* cmd2[0] = "grep"; */
-    /* cmd2[1] = "PATH"; */
-    /* printf("cmd1: %s params %s", cmd1[0], cmd1[1]); */
-    /* pipe_cmd(cmd1, cmd2); */
-    /* pipeCommand(cmd1, cmd2); */
-    /* printf("Test pipe done\n"); */
-
-    getElapsedTime();
     while (1) {
         int background = read_command(&command, &parameters);
 
         // if command is empty continue
-        if (command == NULL ||
-            background == 2) {  // 2 is for pipe => handled in read_command
-                                /* printf("PIPE OR NULL"); */
+        if (command == NULL || background == 2 ||
+            background == -1) {  // 2 is for pipe => handled in read_command
             continue;
         }
-        if (strcmp(command, ":q") == 0) {
+        if (strcmp(command, ":q") == 0) {  // Directly exit
             return 0;
         }
         if (strcmp(command, "exit") == 0 || strcmp(command, "quit") == 0) {
@@ -370,12 +364,15 @@ int main() {
             char answer;
             scanf("%c", &answer);
             if (answer == 'y') {
-                printf("Time: %dms\n", getElapsedTime());
+                printf("Time: %ds\n", getElapsedTime());
+                // Kill all child processes before exiting
+                for (int i = 0; i < childPids.size(); i++) {
+                    kill(childPids[i], SIGKILL);
+                }
                 printf("Goodbye!\n");
                 return 0;
             }
-        } else if (strcmp(command, "cd") == 0) {
-            // change directory
+        } else if (strcmp(command, "cd") == 0) {  // change directory
             if (cd(parameters[1]) < 0) {
                 // return error message if directory doesn't exist
                 perror(parameters[1]);
@@ -383,11 +380,6 @@ int main() {
 
             continue;
         }
-        printf("Command: %s\n", command);
-        printf("Parameters: %s %s %s %s %s %s %s %s %s %s\n", parameters[0],
-               parameters[1], parameters[2], parameters[3], parameters[4],
-               parameters[5], parameters[6], parameters[7], parameters[8],
-               parameters[9]);
         if ((childPid = fork()) == -1) {
             fprintf(stderr, "can't fork\n");
             exit(1);
@@ -401,16 +393,13 @@ int main() {
 
             // if last parameter is & then run in background
         } else if (background == 1) {
-            // if background flag is set
-            // it is not possible to wait for child process
-            // because it doesn't enters the wait() function
-            // store command and parameters in array
+            childPids.push_back(childPid);
             char *comm = command;
             printf("[%d]\n", childPid);
             signal(SIGCHLD, endSignalHandler);
         } else if (background == 0) { /* parent process */
             // parent waits for child to finish
             wait(&status);
-        } /* endif parent */
-    }     /* end while forever */
+        }
+    }
 }
