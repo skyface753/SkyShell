@@ -9,7 +9,7 @@
 time_t startTime = 0;
 
 // get current time in milliseconds
-void getStarttime() {
+void setStarttime() {
     startTime = (time(NULL) - startTime) * 1000;
 }
 
@@ -107,7 +107,7 @@ int read_command(char **com, char ***par) {
 
 int main() {
 
-    getStarttime();
+    setStarttime();
 
     signal(SIGINT, signalHandler);
     
